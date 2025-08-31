@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI LaTeX Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <section id="landing-page">
+        <div class="latex-rain"></div>
+        <div class="landing-content">
+            <h1>AI LaTeX Generator</h1>
+            <p>Turn your ideas into elegant mathematical expressions.</p>
+            <button id="start-button" title="Start Generating">
+                <div class="triangle"></div>
+            </button>
+        </div>
+    </section>
+
+    <main id="generator-interface" class="hidden">
+        <div id="chat-container">
+            <div id="chat-box">
+                <div class="message ai-message">
+                    <p>Hello! How can I help you? Try asking: "Draw a circle equation" or "Show me the integral of x^2".</p>
+                </div>
+            </div>
+            <div id="input-area">
+                <input type="text" id="user-input" placeholder="e.g., Draw me a circle...">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
+    </main>
+
+    <section id="about-section" class="hidden">
+        <h2>Our Team</h2>
+        <div class="team-grid">
+            <div class="team-member" data-details="Member One is a front-end wizard with a passion for creating dynamic and responsive user interfaces. Proficient in React and Vue.">
+                <div class="member-info">
+                    <h3>Member One</h3>
+                    <p>UI/UX Designer</p>
+                </div>
+            </div>
+            <div class="team-member" data-details="Member Two is our backend specialist, skilled in Python, Node.js, and managing cloud infrastructure on IBM Cloud.">
+                <div class="member-info">
+                    <h3>Member Two</h3>
+                    <p>Backend Developer</p>
+                </div>
+            </div>
+            <div class="team-member" data-details="Member Three leads our AI/ML development, focusing on natural language processing models to understand and generate LaTeX.">
+                <div class="member-info">
+                    <h3>Member Three</h3>
+                    <p>AI Engineer</p>
+                </div>
+            </div>
+            <div class="team-member" data-details="Member Four is the project manager, ensuring that deadlines are met and the project vision is realized.">
+                <div class="member-info">
+                    <h3>Member Four</h3>
+                    <p>Project Manager</p>
+                </div>
+            </div>
+            <div class="team-member" data-details="Member Five is a QA specialist dedicated to testing, debugging, and ensuring the final product is flawless.">
+                <div class="member-info">
+                    <h3>Member Five</h3>
+                    <p>QA Engineer</p>
+                </div>
+            </div>
+        </div>
+        <button id="back-to-generator">Back to Generator</button>
+    </section>
+
+    <button id="about-us-btn" class="hidden" title="About Us">?</button>
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
