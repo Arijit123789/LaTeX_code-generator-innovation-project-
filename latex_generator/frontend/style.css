@@ -265,6 +265,18 @@ header {
 #live-preview .katex-display {
     margin: 0;
 }
+#diagram-renderer {
+    text-align: center;
+}
+.render-message {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+#render-btn {
+    font-size: 1rem;
+    padding: 0.8rem 1.5rem;
+}
 
 /* CodeMirror Editor Styling */
 .CodeMirror {

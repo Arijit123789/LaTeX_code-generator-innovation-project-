@@ -3,11 +3,9 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# The Flask app instance must be named 'app' for Vercel
 app = Flask(__name__)
 CORS(app)
 
-# On Vercel, the API key is set as an Environment Variable in the dashboard
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
@@ -20,7 +18,6 @@ def generate_latex():
         return jsonify({"error": "Prompt is missing"}), 400
     
     if not CLAUDE_API_KEY:
-        # This error will show up in Vercel logs if the key is not set
         return jsonify({"error": "CLAUDE_API_KEY is not configured on the server."}), 500
 
     try:
@@ -43,7 +40,6 @@ def generate_latex():
         response_data = response.json()
         raw_latex = response_data['content'][0]['text']
 
-        # We only need to send the raw code now, the frontend will handle rendering
         final_response = {
             "latexCode": raw_latex,
         }
@@ -54,5 +50,45 @@ def generate_latex():
     except Exception as e:
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
-# Note: The if __name__ == '__main__': block is not needed for Vercel
-# but is useful for local testing with the Vercel CLI.
+
+@app.route('/api/render', methods=['POST'])
+def render_diagram():
+    data = request.json
+    latex_code = data.get('latexCode')
+
+    if not latex_code:
+        return jsonify({"error": "No LaTeX code provided"}), 400
+
+    RENDER_SERVICE_URL = "https://latex.yt/api/savetex"
+    
+    try:
+        full_document = (
+            "\\documentclass{article}\n"
+            "\\usepackage{tikz}\n"
+            "\\usepackage{amsmath}\n"
+            "\\pagestyle{empty}\n"
+            "\\begin{document}\n"
+            f"{latex_code}\n"
+            "\\end{document}"
+        )
+
+        payload = {
+            "tex": full_document,
+            "resolution": 200,
+            "dev": "svg"
+        }
+
+        response = requests.post(RENDER_SERVICE_URL, data=payload)
+        response.raise_for_status()
+
+        svg_image_data = response.json().get('result')
+        
+        if not svg_image_data:
+            return jsonify({"error": "Rendering service failed to return an image."}), 500
+
+        return jsonify({"svgImage": svg_image_data})
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to connect to rendering service: {e}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"An internal rendering error occurred: {e}"}), 500
