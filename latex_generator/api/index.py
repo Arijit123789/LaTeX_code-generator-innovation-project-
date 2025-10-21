@@ -2,8 +2,8 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai # <-- New import
-
+import google.generativeai as genai
+from google.genera_veai import types # <-- ADD THIS IMPORT
 app = Flask(__name__)
 CORS(app)
 
@@ -36,6 +36,7 @@ def generate_latex():
         model = genai.GenerativeModel(
             model_name='gemini-pro',
             system_instruction=system_instruction
+            http_options=types.HttpOptions(api_version='v1')
         )
         
         # Generate the content
