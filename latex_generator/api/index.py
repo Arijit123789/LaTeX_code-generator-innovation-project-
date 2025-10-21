@@ -8,8 +8,8 @@ CORS(app)
 
 # --- Gemini Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# We define the V1 API endpoint directly
-GEMINI_API_URL = f"https://generativelang.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}" # Corrected URL path
+# We define the V1 API endpoint directly with the CORRECT hostname
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}" # Corrected URL path
 
 
 @app.route('/api/generate', methods=['POST'])
