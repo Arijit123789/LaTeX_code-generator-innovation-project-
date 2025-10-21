@@ -24,11 +24,11 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- This is the new, direct API call logic ---
+        # --- Direct API call logic ---
         
         system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
         
-        # 1. Create the payload in the format the API expects
+        # Create the payload
         payload = {
             "system_instruction": {
                 "parts": [{"text": system_instruction}]
@@ -38,24 +38,22 @@ def generate_latex():
             ]
         }
         
-        # 2. Define the headers
+        # Define the headers
         headers = {
             "Content-Type": "application/json"
         }
         
-        # 3. Make the web request to the v1 API
+        # Make the web request to the v1 API
         response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
         
-        # 4. Check for a bad response (like 404, 500, etc.)
+        # Check for HTTP errors
         response.raise_for_status() 
         
-        # 5. Extract the text from the JSON response
+        # Extract the text
         response_data = response.json()
         raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
         
-        # --- End of new logic ---
-
-        # 6. Clean up the response
+        # Clean up the response
         raw_latex = raw_latex.strip()
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex[7:]
@@ -71,22 +69,23 @@ def generate_latex():
         return jsonify(final_response)
 
     except requests.exceptions.RequestException as e:
-        # This will catch HTTP errors (like 404, 502)
         print(f"API Request Error: {e}")
         try:
-            return jsonify({"error": f"API Error: {e.response.json().get('error', {}).get('message', 'Unknown')}"}), 502
+            # Try to return the specific error message from Google
+            error_message = e.response.json().get('error', {}).get('message', f'HTTP Error {e.response.status_code}')
+            return jsonify({"error": f"API Error: {error_message}"}), 502
         except:
+            # Fallback if parsing the error fails
             return jsonify({"error": f"API Request Error: {e}"}), 502
             
     except Exception as e:
-        # This will catch other errors
         print(f"An internal server error occurred: {e}") 
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
-    # --- THIS ROUTE IS UNCHANGED AND CORRECT ---
+    # --- This route is unchanged ---
     
     data = request.json
     latex_code = data.get('latexCode')
