@@ -7,9 +7,9 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Gemini Configuration ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # We define the V1 API endpoint directly
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+GEMINI_API_URL = f"https://generativelang.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}" # Corrected URL path
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -19,40 +19,48 @@ def generate_latex():
 
     if not prompt:
         return jsonify({"error": "Prompt is missing"}), 400
-    
+
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
         # --- Direct API call logic ---
-        
-        system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
-        
+
+        system_instruction_text = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
+
         # Create the payload
         payload = {
-            "system_instruction": {
-                "parts": [{"text": system_instruction}]
+            # Use camelCase 'systemInstruction' as expected by the API
+            "systemInstruction": {
+                "parts": [{"text": system_instruction_text}]
             },
             "contents": [
                 {"parts": [{"text": prompt}]}
             ]
         }
-        
+
         # Define the headers
         headers = {
             "Content-Type": "application/json"
         }
-        
+
         # Make the web request to the v1 API
         response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
-        
+
         # Check for HTTP errors
-        response.raise_for_status() 
-        
+        response.raise_for_status()
+
         # Extract the text
         response_data = response.json()
-        raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
-        
+
+        # Handle potential variations in response structure
+        try:
+            raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError, TypeError) as e:
+             print(f"Error parsing response structure: {e}. Response data: {response_data}")
+             return jsonify({"error": f"Failed to parse API response. Structure might have changed."}), 500
+
+
         # Clean up the response
         raw_latex = raw_latex.strip()
         if raw_latex.startswith("```latex"):
@@ -70,23 +78,26 @@ def generate_latex():
 
     except requests.exceptions.RequestException as e:
         print(f"API Request Error: {e}")
+        error_message = f'HTTP Error {e.response.status_code}'
         try:
             # Try to return the specific error message from Google
-            error_message = e.response.json().get('error', {}).get('message', f'HTTP Error {e.response.status_code}')
-            return jsonify({"error": f"API Error: {error_message}"}), 502
+            error_details = e.response.json().get('error', {})
+            error_message = error_details.get('message', error_message)
+            print(f"Google API Error Details: {error_details}")
         except:
             # Fallback if parsing the error fails
-            return jsonify({"error": f"API Request Error: {e}"}), 502
-            
+             pass # Use the basic HTTP error message
+        return jsonify({"error": f"API Error: {error_message}"}), 502
+
     except Exception as e:
-        print(f"An internal server error occurred: {e}") 
+        print(f"An internal server error occurred: {e}")
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
     # --- This route is unchanged ---
-    
+
     data = request.json
     latex_code = data.get('latexCode')
 
@@ -94,7 +105,7 @@ def render_diagram():
         return jsonify({"error": "No LaTeX code provided"}), 400
 
     RENDER_SERVICE_URL = "[https://latex.yt/api/savetex](https://latex.yt/api/savetex)"
-    
+
     try:
         full_document = (
             "\\documentclass{article}\n"
@@ -116,7 +127,7 @@ def render_diagram():
         response.raise_for_status()
 
         svg_image_data = response.json().get('result')
-        
+
         if not svg_image_data:
             return jsonify({"error": "Rendering service failed to return an image."}), 500
 
