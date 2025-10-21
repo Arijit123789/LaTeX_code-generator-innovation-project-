@@ -1,14 +1,9 @@
 {
-  "builds": [
-    {
-      "src": "/api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "/frontend/**",
-      "use": "@vercel/static"
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.9"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/api/(.*)",
@@ -18,10 +13,5 @@
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
-  ],
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3.9"
-    }
-  }
+  ]
 }
