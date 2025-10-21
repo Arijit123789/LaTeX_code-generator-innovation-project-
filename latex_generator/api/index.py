@@ -2,16 +2,17 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from google import genai
-from google.genai import types
-from google.genai.models import GenerativeModel # <-- THIS IS THE CORRECT IMPORT
+import google.generativeai as genai # <-- This is the correct import for this library
 
 app = Flask(__name__)
 CORS(app)
 
 # --- Configure Gemini ---
-# We just need to check if the key exists.
+# The 'google-generativeai' library uses genai.configure()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
 
 @app.route('/api/generate', methods=['POST'])
 def generate_latex():
@@ -25,29 +26,20 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- This is the new, correct logic for 'google-genai' ---
+        # --- This is the correct logic for the 'google-generativeai' library ---
         
-        # 1. Initialize the client.
-        client = genai.Client(
-            http_options=types.HttpOptions(api_version='v1')
-        )
-        
-        # 2. Define the system prompt
         system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
         
-        # 3. Instantiate the model, passing the client and system instruction
-        model = GenerativeModel(
-             model_name='gemini-pro',
-             system_instruction=system_instruction,
-             client=client
+        # 1. Initialize the model, which accepts the system_instruction
+        model = genai.GenerativeModel(
+            model_name='gemini-pro',
+            system_instruction=system_instruction
         )
         
-        # 4. Call generate_content on the model instance (NOT client.models)
-        response = model.generate_content(
-            contents=[prompt]
-        )
+        # 2. Generate the content
+        response = model.generate_content(prompt)
         
-        # 5. Clean up the response text
+        # 3. Clean up the response text
         raw_latex = response.text.strip()
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex[7:]
@@ -57,7 +49,7 @@ def generate_latex():
             raw_latex = raw_latex[:-3]
         raw_latex = raw_latex.strip()
 
-        # --- End of new logic ---
+        # --- End of logic ---
 
         final_response = {
             "latexCode": raw_latex,
@@ -72,7 +64,7 @@ def generate_latex():
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
-    # --- THIS ENTIRE ROUTE REMAINS UNCHANGED ---
+    # --- THIS ENTIRE ROUTE IS UNCHANGED AND CORRECT ---
     
     data = request.json
     latex_code = data.get('latexCode')
