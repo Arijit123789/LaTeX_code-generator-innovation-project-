@@ -2,18 +2,16 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from google import genai       # <-- Correct new import
-from google.genai import types   # <-- Correct new import
+from google import genai
+from google.genai import types
+from google.genai import GenerativeModel # <-- We need this specific import
 
 app = Flask(__name__)
 CORS(app)
 
 # --- Configure Gemini ---
 # We just need to check if the key exists.
-# The 'google-genai' library finds it automatically from the environment.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
-# --- (The failing 'genai.configure()' line is removed) ---
-
 
 @app.route('/api/generate', methods=['POST'])
 def generate_latex():
@@ -29,8 +27,7 @@ def generate_latex():
     try:
         # --- This is the new, correct logic for 'google-genai' ---
         
-        # 1. Initialize the client. It automatically finds the API key.
-        # We pass the http_options here to force the 'v1' API.
+        # 1. Initialize the client.
         client = genai.Client(
             http_options=types.HttpOptions(api_version='v1')
         )
@@ -38,14 +35,19 @@ def generate_latex():
         # 2. Define the system prompt
         system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
         
-        # 3. Call the model using the client's 'models.generate_content' method
-        response = client.models.generate_content(
-            model='gemini-pro', # The model name
-            contents=[prompt],  # The user's prompt
-            system_instruction=system_instruction
+        # 3. Instantiate the model, passing the client and system instruction
+        model = GenerativeModel(
+             model_name='gemini-pro',
+             system_instruction=system_instruction,
+             client=client
         )
         
-        # 4. Clean up the response text
+        # 4. Call generate_content on the model instance (NOT client.models)
+        response = model.generate_content(
+            contents=[prompt]
+        )
+        
+        # 5. Clean up the response text
         raw_latex = response.text.strip()
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex[7:]
