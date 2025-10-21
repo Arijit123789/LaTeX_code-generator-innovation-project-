@@ -6,15 +6,40 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# --- Gemini Configuration ---
+# --- Gemini / Generative Language Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Correct V1 API endpoint
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+# Allow overriding the model via env var; default to a widely-available model
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "text-bison-001")
+
+# NOTE:
+# The correct REST endpoint for the Google Generative Language API follows this pattern:
+#   POST https://generativelanguage.googleapis.com/v1/models/{model}:generate?key={API_KEY}
+# Some older or different clients used `:generateContent` which is not supported for all models.
+BASE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models"
+GEMINI_API_URL = f"{BASE_GEMINI_API_URL}/{GEMINI_MODEL}:generate?key={GEMINI_API_KEY}"
+
+
+@app.route('/api/list-models', methods=['GET'])
+def list_models():
+    """
+    Helper endpoint to list available models from the Generative Language API.
+    This can help debug "model not found" issues.
+    """
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
+
+    try:
+        url = f"{BASE_GEMINI_API_URL}?key={GEMINI_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to call ListModels: {e}"}), 502
 
 
 @app.route('/api/generate', methods=['POST'])
 def generate_latex():
-    data = request.json
+    data = request.json or {}
     prompt = data.get('prompt')
 
     if not prompt:
@@ -24,57 +49,60 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- Direct API call logic (Simplified Payload) ---
-
-        # Create the payload WITHOUT systemInstruction
+        # Build a request payload matching the v1 REST API for text generation models.
+        # Many models accept a 'prompt' object with a 'text' field; tune temperature/maxOutputTokens as needed.
         payload = {
-            "contents": [
-                {"parts": [{"text": prompt}]}
-            ]
+            "prompt": {
+                "text": prompt
+            },
+            # optional tuning params
+            "temperature": float(data.get("temperature", 0.2)),
+            "maxOutputTokens": int(data.get("maxOutputTokens", 800))
         }
 
-        # Define the headers
         headers = {
             "Content-Type": "application/json"
         }
 
-        # Make the web request
-        response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
-
-        # Check for HTTP errors
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
-
-        # Extract the text
         response_data = response.json()
-        try:
-            # Add safety check for response structure
-            if 'candidates' not in response_data or not response_data['candidates']:
-                 print(f"API response missing 'candidates'. Response: {response_data}")
-                 return jsonify({"error": "API response format unexpected (missing candidates)."}), 500
-            if 'content' not in response_data['candidates'][0] or 'parts' not in response_data['candidates'][0]['content'] or not response_data['candidates'][0]['content']['parts']:
-                 print(f"API response missing content parts. Response: {response_data}")
-                 # Check for safety blocks
-                 if 'finishReason' in response_data['candidates'][0] and response_data['candidates'][0]['finishReason'] == 'SAFETY':
-                     safety_ratings = response_data['candidates'][0].get('safetyRatings', [])
-                     blocked_categories = [r['category'] for r in safety_ratings if r.get('probability') in ['MEDIUM', 'HIGH']]
-                     return jsonify({"error": f"API Error: Content blocked due to safety reasons ({', '.join(blocked_categories)})."}), 400
-                 return jsonify({"error": "API response format unexpected (missing content parts)."}), 500
 
-            raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
+        # Robust parsing for different response shapes across models / API versions.
+        raw_latex = None
 
-        except (KeyError, IndexError, TypeError) as e:
-             print(f"Error parsing response structure: {e}. Response data: {response_data}")
-             return jsonify({"error": f"Failed to parse API response structure."}), 500
+        # Common structure: response_data["candidates"][0]["output"]
+        candidates = response_data.get("candidates") or []
+        if candidates:
+            first = candidates[0]
+            # Known keys that may carry the generated text across different models/versions:
+            if isinstance(first, dict):
+                raw_latex = first.get("output") or first.get("text")
+                # older/other shape: first["content"]["parts"][0]["text"]
+                if not raw_latex and "content" in first:
+                    try:
+                        parts = first["content"].get("parts") if isinstance(first["content"], dict) else None
+                        if parts and len(parts) > 0 and isinstance(parts[0], dict):
+                            raw_latex = parts[0].get("text")
+                    except Exception:
+                        raw_latex = None
+        else:
+            # Some responses put generated text at top-level keys
+            raw_latex = response_data.get("output") or response_data.get("text")
 
-        # Clean up the response
+        if not raw_latex:
+            # If model returns an informative error, include it
+            msg = response_data.get("error") or response_data
+            return jsonify({"error": "API response format unexpected or empty output.", "details": msg}), 500
+
+        # Clean up markdown/code fences if present
         raw_latex = raw_latex.strip()
         if raw_latex.startswith("```latex"):
-            raw_latex = raw_latex[7:]
+            raw_latex = raw_latex[len("```latex"):].strip()
         if raw_latex.startswith("```"):
-            raw_latex = raw_latex[3:]
+            raw_latex = raw_latex[len("```"):].strip()
         if raw_latex.endswith("```"):
-            raw_latex = raw_latex[:-3]
-        raw_latex = raw_latex.strip()
+            raw_latex = raw_latex[:-3].strip()
 
         final_response = {
             "latexCode": raw_latex,
@@ -82,34 +110,48 @@ def generate_latex():
         return jsonify(final_response)
 
     except requests.exceptions.RequestException as e:
-        print(f"API Request Error: {e}")
-        error_message = f'HTTP Error {e.response.status_code}'
+        # Provide useful debugging hints when the model isn't found or supported
+        status_code = None
         try:
-            error_details = e.response.json().get('error', {})
-            error_message = error_details.get('message', error_message)
-            # Log the detailed error from Google
-            print(f"Google API Error Details: Status Code {e.response.status_code}, Message: {error_message}, Details: {error_details}")
-        except:
-             pass # Use the basic HTTP error message if parsing fails
-        return jsonify({"error": f"API Error: {error_message}"}), 502 # Return specific code for API errors
+            status_code = e.response.status_code
+        except Exception:
+            pass
+
+        # If the error text mentions "not found" or "generateContent", surface a helpful hint
+        error_text = str(e)
+        if e.response is not None:
+            try:
+                body = e.response.json()
+                error_text = body.get("error", body)
+            except Exception:
+                error_text = e.response.text or error_text
+
+        hint = ""
+        if "not found" in error_text or "generateContent" in error_text or (status_code == 404):
+            hint = (
+                "The selected model or method is not available for the v1 generate endpoint. "
+                "Try calling /api/list-models to see available models, or set GEMINI_MODEL to a supported model "
+                "(e.g. text-bison-001) via environment variables."
+            )
+
+        return jsonify({"error": f"API Request Error: {error_text}", "hint": hint}), 502
 
     except Exception as e:
-        print(f"An internal server error occurred: {e}")
         import traceback
-        traceback.print_exc() # Print full traceback to Vercel logs
+        traceback.print_exc()
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
-    # --- This route is unchanged ---
-    data = request.json
+    data = request.json or {}
     latex_code = data.get('latexCode')
 
     if not latex_code:
         return jsonify({"error": "No LaTeX code provided"}), 400
 
-    RENDER_SERVICE_URL = "[https://latex.yt/api/savetex](https://latex.yt/api/savetex)"
+    # Fixed render service URL (remove markdown-style brackets)
+    RENDER_SERVICE_URL = "https://latex.yt/api/savetex"
 
     try:
         full_document = (
@@ -128,13 +170,14 @@ def render_diagram():
             "dev": "svg"
         }
 
-        response = requests.post(RENDER_SERVICE_URL, data=payload)
+        # Use JSON for the rendering service (it may accept form-data, but JSON is typical)
+        response = requests.post(RENDER_SERVICE_URL, json=payload, timeout=30)
         response.raise_for_status()
 
         svg_image_data = response.json().get('result')
 
         if not svg_image_data:
-            return jsonify({"error": "Rendering service failed to return an image."}), 500
+            return jsonify({"error": "Rendering service failed to return an image.", "details": response.json()}), 500
 
         return jsonify({"svgImage": svg_image_data})
 
@@ -142,3 +185,7 @@ def render_diagram():
         return jsonify({"error": f"Failed to connect to rendering service: {e}"}), 502
     except Exception as e:
         return jsonify({"error": f"An internal rendering error occurred: {e}"}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
