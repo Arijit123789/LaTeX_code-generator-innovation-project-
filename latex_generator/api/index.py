@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google import genai
 from google.genai import types
-from google.genai import GenerativeModel # <-- We need this specific import
+from google.genai.models import GenerativeModel # <-- THIS IS THE CORRECT IMPORT
 
 app = Flask(__name__)
 CORS(app)
