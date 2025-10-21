@@ -34,7 +34,7 @@ def generate_latex():
         
         # Initialize the model (gemini-1.5-flash is fast and effective)
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash-latest',
+            model_name='gemini-1.5-flash',
             system_instruction=system_instruction
         )
         
