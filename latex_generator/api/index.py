@@ -2,17 +2,17 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from google import genai
-from google.genai import types# <-- ADD THIS IMPORT
+from google import genai       # <-- Correct new import
+from google.genai import types   # <-- Correct new import
+
 app = Flask(__name__)
 CORS(app)
 
 # --- Configure Gemini ---
-# Get the new API key from environment variables
+# We just need to check if the key exists.
+# The 'google-genai' library finds it automatically from the environment.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-# --- (Old Claude variables removed) ---
+# --- (The failing 'genai.configure()' line is removed) ---
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -27,22 +27,25 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- This is the new Gemini logic ---
+        # --- This is the new, correct logic for 'google-genai' ---
         
-        # This system prompt is crucial for getting *only* the code
-        system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
-        
-        # Initialize the model (gemini-1.5-flash is fast and effective)
-        model = genai.GenerativeModel(
-            model_name='gemini-pro',
-            system_instruction=system_instruction,
+        # 1. Initialize the client. It automatically finds the API key.
+        # We pass the http_options here to force the 'v1' API.
+        client = genai.Client(
             http_options=types.HttpOptions(api_version='v1')
         )
         
-        # Generate the content
-        response = model.generate_content(prompt)
+        # 2. Define the system prompt
+        system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
         
-        # Clean up the response, just in case Gemini adds markdown fences
+        # 3. Call the model using the client's 'models.generate_content' method
+        response = client.models.generate_content(
+            model='gemini-pro', # The model name
+            contents=[prompt],  # The user's prompt
+            system_instruction=system_instruction
+        )
+        
+        # 4. Clean up the response text
         raw_latex = response.text.strip()
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex[7:]
@@ -52,7 +55,7 @@ def generate_latex():
             raw_latex = raw_latex[:-3]
         raw_latex = raw_latex.strip()
 
-        # --- End of new Gemini logic ---
+        # --- End of new logic ---
 
         final_response = {
             "latexCode": raw_latex,
@@ -60,15 +63,14 @@ def generate_latex():
         return jsonify(final_response)
 
     except Exception as e:
-        # This will catch errors from the Gemini API
-        print(f"Error during Gemini generation: {e}") # Good for Vercel logs
+        # This will catch errors and log them to Vercel
+        print(f"Error during Gemini generation: {e}") 
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
-    # --- THIS ENTIRE ROUTE IS UNCHANGED ---
-    # It correctly uses the latex.yt rendering service
+    # --- THIS ENTIRE ROUTE REMAINS UNCHANGED ---
     
     data = request.json
     latex_code = data.get('latexCode')
