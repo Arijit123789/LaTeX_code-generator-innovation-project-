@@ -24,15 +24,10 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- Direct API call logic ---
+        # --- Direct API call logic (Simplified Payload) ---
 
-        system_instruction_text = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
-
-        # Create the payload with the correct field name
+        # Create the payload WITHOUT systemInstruction
         payload = {
-            "systemInstruction": { # <-- CORRECTED to camelCase
-                "parts": [{"text": system_instruction_text}]
-            },
             "contents": [
                 {"parts": [{"text": prompt}]}
             ]
@@ -52,7 +47,21 @@ def generate_latex():
         # Extract the text
         response_data = response.json()
         try:
+            # Add safety check for response structure
+            if 'candidates' not in response_data or not response_data['candidates']:
+                 print(f"API response missing 'candidates'. Response: {response_data}")
+                 return jsonify({"error": "API response format unexpected (missing candidates)."}), 500
+            if 'content' not in response_data['candidates'][0] or 'parts' not in response_data['candidates'][0]['content'] or not response_data['candidates'][0]['content']['parts']:
+                 print(f"API response missing content parts. Response: {response_data}")
+                 # Check for safety blocks
+                 if 'finishReason' in response_data['candidates'][0] and response_data['candidates'][0]['finishReason'] == 'SAFETY':
+                     safety_ratings = response_data['candidates'][0].get('safetyRatings', [])
+                     blocked_categories = [r['category'] for r in safety_ratings if r.get('probability') in ['MEDIUM', 'HIGH']]
+                     return jsonify({"error": f"API Error: Content blocked due to safety reasons ({', '.join(blocked_categories)})."}), 400
+                 return jsonify({"error": "API response format unexpected (missing content parts)."}), 500
+
             raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
+
         except (KeyError, IndexError, TypeError) as e:
              print(f"Error parsing response structure: {e}. Response data: {response_data}")
              return jsonify({"error": f"Failed to parse API response structure."}), 500
@@ -78,13 +87,16 @@ def generate_latex():
         try:
             error_details = e.response.json().get('error', {})
             error_message = error_details.get('message', error_message)
-            print(f"Google API Error Details: {error_details}")
+            # Log the detailed error from Google
+            print(f"Google API Error Details: Status Code {e.response.status_code}, Message: {error_message}, Details: {error_details}")
         except:
-             pass
-        return jsonify({"error": f"API Error: {error_message}"}), 502
+             pass # Use the basic HTTP error message if parsing fails
+        return jsonify({"error": f"API Error: {error_message}"}), 502 # Return specific code for API errors
 
     except Exception as e:
         print(f"An internal server error occurred: {e}")
+        import traceback
+        traceback.print_exc() # Print full traceback to Vercel logs
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
