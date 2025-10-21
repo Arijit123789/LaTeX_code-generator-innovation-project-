@@ -2,16 +2,14 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai # <-- This is the correct import for this library
 
 app = Flask(__name__)
 CORS(app)
 
-# --- Configure Gemini ---
-# The 'google-generativeai' library uses genai.configure()
+# --- Gemini Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+# We define the V1 API endpoint directly
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -26,21 +24,39 @@ def generate_latex():
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
 
     try:
-        # --- This is the correct logic for the 'google-generativeai' library ---
+        # --- This is the new, direct API call logic ---
         
         system_instruction = "You are a LaTeX expert. Given a user's prompt, provide only the raw LaTeX code required to represent their request. Do not include any explanations, surrounding text, or markdown code fences."
         
-        # 1. Initialize the model, which accepts the system_instruction
-        model = genai.GenerativeModel(
-            model_name='gemini-pro',
-            system_instruction=system_instruction
-        )
+        # 1. Create the payload in the format the API expects
+        payload = {
+            "system_instruction": {
+                "parts": [{"text": system_instruction}]
+            },
+            "contents": [
+                {"parts": [{"text": prompt}]}
+            ]
+        }
         
-        # 2. Generate the content
-        response = model.generate_content(prompt)
+        # 2. Define the headers
+        headers = {
+            "Content-Type": "application/json"
+        }
         
-        # 3. Clean up the response text
-        raw_latex = response.text.strip()
+        # 3. Make the web request to the v1 API
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
+        
+        # 4. Check for a bad response (like 404, 500, etc.)
+        response.raise_for_status() 
+        
+        # 5. Extract the text from the JSON response
+        response_data = response.json()
+        raw_latex = response_data['candidates'][0]['content']['parts'][0]['text']
+        
+        # --- End of new logic ---
+
+        # 6. Clean up the response
+        raw_latex = raw_latex.strip()
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex[7:]
         if raw_latex.startswith("```"):
@@ -49,22 +65,28 @@ def generate_latex():
             raw_latex = raw_latex[:-3]
         raw_latex = raw_latex.strip()
 
-        # --- End of logic ---
-
         final_response = {
             "latexCode": raw_latex,
         }
         return jsonify(final_response)
 
+    except requests.exceptions.RequestException as e:
+        # This will catch HTTP errors (like 404, 502)
+        print(f"API Request Error: {e}")
+        try:
+            return jsonify({"error": f"API Error: {e.response.json().get('error', {}).get('message', 'Unknown')}"}), 502
+        except:
+            return jsonify({"error": f"API Request Error: {e}"}), 502
+            
     except Exception as e:
-        # This will catch errors and log them to Vercel
-        print(f"Error during Gemini generation: {e}") 
+        # This will catch other errors
+        print(f"An internal server error occurred: {e}") 
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
 
 @app.route('/api/render', methods=['POST'])
 def render_diagram():
-    # --- THIS ENTIRE ROUTE IS UNCHANGED AND CORRECT ---
+    # --- THIS ROUTE IS UNCHANGED AND CORRECT ---
     
     data = request.json
     latex_code = data.get('latexCode')
@@ -105,7 +127,3 @@ def render_diagram():
         return jsonify({"error": f"Failed to connect to rendering service: {e}"}), 502
     except Exception as e:
         return jsonify({"error": f"An internal rendering error occurred: {e}"}), 500
-
-# This part is needed if you run locally (Vercel doesn't use it)
-if __name__ == '__main__':
-    app.run(debug=True)
