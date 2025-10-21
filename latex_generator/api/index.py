@@ -2,8 +2,8 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai
-from google.generativeai import types # <-- ADD THIS IMPORT
+from google import genai
+from google.genai import types# <-- ADD THIS IMPORT
 app = Flask(__name__)
 CORS(app)
 
