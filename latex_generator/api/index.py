@@ -1,3 +1,39 @@
+import os
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import traceback # Import traceback for logging
+
+# --- App Setup ---
+app = Flask(__name__)
+CORS(app)
+
+# --- Gemini / Generative Language Configuration ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# This is the correct model name from your API list
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-pro-latest")
+
+BASE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_API_URL = f"{BASE_GEMINI_API_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+
+@app.route('/api/list-models', methods=['GET'])
+def list_models():
+    """
+    Helper endpoint to list available models from the Generative Language API.
+    """
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to call ListModels: {e}"}), 502
+
+
 @app.route('/api/generate', methods=['POST'])
 def generate_latex():
     data = request.json or {}
@@ -133,6 +169,52 @@ def generate_latex():
         return jsonify({"error": f"API Request Error: {status_code} - {error_text}", "hint": hint}), 502
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        traceback.print_exc() # This will log the error to Vercel
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
+
+
+@app.route('/api/render', methods=['POST'])
+def render_diagram():
+    data = request.json or {}
+    latex_code = data.get('latexCode')
+
+    if not latex_code:
+        return jsonify({"error": "No LaTeX code provided"}), 400
+
+    RENDER_SERVICE_URL = "[https://latex.yt/api/savetex](https://latex.yt/api/savetex)"
+
+    try:
+        full_document = (
+            "\\documentclass{article}\n"
+            "\\usepackage{tikz}\n"
+            "\\usepackage{amsmath}\n"
+            "\\pagestyle{empty}\n"
+            "\\begin{document}\n"
+            f"{latex_code}\n"
+            "\\end{document}"
+        )
+
+        payload = {
+            "tex": full_document,
+            "resolution": 200,
+            "dev": "svg"
+        }
+
+        response = requests.post(RENDER_SERVICE_URL, json=payload, timeout=30)
+        response.raise_for_status()
+
+        svg_image_data = response.json().get('result')
+
+        if not svg_image_data:
+            return jsonify({"error": "Rendering service failed to return an image.", "details": response.json()}), 500
+
+        return jsonify({"svgImage": svg_image_data})
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to connect to rendering service: {e}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"An internal rendering error occurred: {e}"}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
