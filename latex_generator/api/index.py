@@ -9,7 +9,7 @@ CORS(app)
 # --- Gemini / Generative Language Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use a current, recommended Gemini model.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "ggemini-pro-latest")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-pro-latest")
 
 # NOTE:
 # The correct REST endpoint for the current Google AI Gemini API (v1beta) is:
