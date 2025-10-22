@@ -77,7 +77,7 @@ def generate_latex():
             "generationConfig": {
                 "temperature": float(data.get("temperature", 0.2)),
                 # Increased token limit
-                "maxOutputTokens": int(data.get("maxOutputTokens", 2048))
+                "maxOutputTokens": int(data.get("maxOutputTokens", 3000))
             }
         }
 
