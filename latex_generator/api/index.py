@@ -38,6 +38,17 @@ def list_models():
 def generate_latex():
     data = request.json or {}
     prompt = data.get('prompt')
+    # System instruction to guide the model
+system_instruction = (
+    "You are an expert LaTeX assistant. "
+    "The user will provide a description of a diagram, equation, or table. "
+    "You must respond with ONLY the raw LaTeX code required to generate it. "
+    "Do not include any introductory text, explanations, markdown, or code fences like 'Here is the code:' or '```latex'. "
+    "Your response should be only the valid LaTeX code itself and nothing else."
+)
+
+# Combine the system instruction with the user's prompt
+full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
 
     if not prompt:
         return jsonify({"error": "Prompt is missing"}), 400
@@ -52,7 +63,7 @@ def generate_latex():
                 {
                     "parts": [
                         {
-                            "text": prompt
+                            "text": full_prompt
                         }
                     ]
                 }
