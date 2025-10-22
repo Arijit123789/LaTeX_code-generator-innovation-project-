@@ -35,26 +35,31 @@ def list_models():
 
 
 @app.route('/api/generate', methods=['POST'])
+@app.route('/api/generate', methods=['POST'])
 def generate_latex():
     data = request.json or {}
     prompt = data.get('prompt')
-    # System instruction to guide the model
-system_instruction = (
-    "You are an expert LaTeX assistant. "
-    "The user will provide a description of a diagram, equation, or table. "
-    "You must respond with ONLY the raw LaTeX code required to generate it. "
-    "Do not include any introductory text, explanations, markdown, or code fences like 'Here is the code:' or '```latex'. "
-    "Your response should be only the valid LaTeX code itself and nothing else."
-)
 
-# Combine the system instruction with the user's prompt
-full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
-
+    # This line MUST be at the same indentation level as the line above
     if not prompt:
         return jsonify({"error": "Prompt is missing"}), 400
 
     if not GEMINI_API_KEY:
         return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 500
+
+    # --- NEW System Prompt Logic ---
+    # System instruction to guide the model
+    system_instruction = (
+        "You are an expert LaTeX assistant. "
+        "The user will provide a description of a diagram, equation, or table. "
+        "You must respond with ONLY the raw LaTeX code required to generate it. "
+        "Do not include any introductory text, explanations, markdown, or code fences like 'Here is the code:' or '```latex'. "
+        "Your response should be only the valid LaTeX code itself and nothing else."
+    )
+    
+    # Combine the system instruction with the user's prompt
+    full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
+    # --- End of new logic ---
 
     try:
         # Build a request payload matching the v1beta generateContent API
@@ -63,7 +68,8 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
                 {
                     "parts": [
                         {
-                            "text": full_prompt
+                            # Use the new 'full_prompt' here
+                            "text": full_prompt 
                         }
                     ]
                 }
@@ -71,7 +77,8 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
             # Optional tuning params
             "generationConfig": {
                 "temperature": float(data.get("temperature", 0.2)),
-                "maxOutputTokens": int(data.get("maxOutputTokens", 3000))
+                # Increased token limit
+                "maxOutputTokens": int(data.get("maxOutputTokens", 2048))
             }
         }
 
@@ -83,12 +90,11 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
         response.raise_for_status()
         response_data = response.json()
 
-        # --- NEW ROBUST PARSING LOGIC ---
+        # --- ROBUST PARSING LOGIC ---
         raw_latex = None
         try:
             # Check if candidates list exists and is not empty
             if not response_data.get("candidates"):
-                # If no candidates, it might be a prompt-level block
                 prompt_feedback = response_data.get("promptFeedback")
                 if prompt_feedback:
                     block_reason = prompt_feedback.get("blockReason", "Unknown")
@@ -97,23 +103,24 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
                         "error": f"Prompt was blocked by API.",
                         "details": f"Reason: {block_reason}. Safety Ratings: {safety_ratings}"
                     }), 400
-                
-                # Otherwise, it's an unknown empty response
                 return jsonify({"error": "API returned an empty response with no candidates.", "details": response_data}), 500
 
-            # Get the first candidate
             candidate = response_data["candidates"][0]
-
-            # Check if generation finished normally
             finish_reason = candidate.get("finishReason")
             if finish_reason and finish_reason != "STOP":
+                # Handle MAX_TOKENS error
+                if finish_reason == "MAX_TOKENS":
+                     return jsonify({
+                        "error": "Generation stopped: The model's response was too long.",
+                        "details": f"Reason: {finish_reason}. Try a more specific prompt."
+                    }), 500
+                
                 safety_ratings = candidate.get("safetyRatings", "N/A")
                 return jsonify({
                     "error": f"Generation stopped for reason: {finish_reason}",
                     "details": f"Safety Ratings: {safety_ratings}"
                 }), 500
 
-            # Safely try to access the text
             if (
                 candidate.get("content") and
                 candidate["content"].get("parts") and
@@ -122,24 +129,20 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
             ):
                 raw_latex = candidate["content"]["parts"][0]["text"]
             else:
-                # If the structure is valid but text is missing
                 return jsonify({
                     "error": "API response format unexpected: 'text' part is missing.",
                     "details": candidate
                 }), 500
 
         except (KeyError, IndexError, TypeError, AttributeError) as e:
-            # This is a fallback for a truly unexpected structure
             error_details = response_data.get("error", response_data)
             return jsonify({
                 "error": f"API response parsing failed unexpectedly: {e}",
                 "details": error_details
             }), 500
-        # --- END OF NEW PARSING LOGIC ---
-
+        # --- END OF PARSING LOGIC ---
 
         if not raw_latex:
-            # This should not be reachable if the logic above is correct, but as a safeguard
             return jsonify({"error": "API returned no text output.", "details": response_data}), 500
 
         # Clean up markdown/code fences if present
@@ -182,49 +185,6 @@ full_prompt = f"{system_instruction}\n\nUSER REQUEST: {prompt}\n\nLATEX CODE:"
     except Exception as e:
         traceback.print_exc() # This will log the error to Vercel
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
-
-
-@app.route('/api/render', methods=['POST'])
-def render_diagram():
-    data = request.json or {}
-    latex_code = data.get('latexCode')
-
-    if not latex_code:
-        return jsonify({"error": "No LaTeX code provided"}), 400
-
-    RENDER_SERVICE_URL = "[https://latex.yt/api/savetex](https://latex.yt/api/savetex)"
-
-    try:
-        full_document = (
-            "\\documentclass{article}\n"
-            "\\usepackage{tikz}\n"
-            "\\usepackage{amsmath}\n"
-            "\\pagestyle{empty}\n"
-            "\\begin{document}\n"
-            f"{latex_code}\n"
-            "\\end{document}"
-        )
-
-        payload = {
-            "tex": full_document,
-            "resolution": 200,
-            "dev": "svg"
-        }
-
-        response = requests.post(RENDER_SERVICE_URL, json=payload, timeout=30)
-        response.raise_for_status()
-
-        svg_image_data = response.json().get('result')
-
-        if not svg_image_data:
-            return jsonify({"error": "Rendering service failed to return an image.", "details": response.json()}), 500
-
-        return jsonify({"svgImage": svg_image_data})
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Failed to connect to rendering service: {e}"}), 502
-    except Exception as e:
-        return jsonify({"error": f"An internal rendering error occurred: {e}"}), 500
 
 
 if __name__ == "__main__":
