@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- UPDATED: Function to update the live preview ---
+    // This now includes your new friendly error message logic.
     const updatePreview = () => {
         const code = editor.getValue();
         diagramRenderer.classList.add('hidden');
@@ -46,26 +47,36 @@ document.addEventListener('DOMContentLoaded', () => {
             livePreview.innerHTML = '';
             return;
         }
-       // This is inside your app's JavaScript
-try {
-  // This line tries to render the LaTeX code
-  katex.render(latexCode, previewElement, { throwOnError: true });
 
-} catch (error) {
-  // This is the FIX:
-  // Instead of the error, show your custom message
-  const friendlyMessage = `
-    <div style="color: #FFB300; padding: 10px; font-family: sans-serif;">
-      <strong>Preview Error!</strong>
-      <p>This previewer can only render <b>math formulas</b> (like <code>$E=mc^2$</code>).</p>
-      <p>It looks like you've generated a <b>full document</b> (starting with <code>\\documentclass</code>).</p>
-      <hr style="border-color: #555;">
-      <p>Please <b>Copy</b> the code and use the <b>Overleaf</b> button to paste it into a full LaTeX compiler to see the final PDF.</p>
-    </div>
-  `;
-  
-  previewElement.innerHTML = friendlyMessage;
-}
+        try {
+            // 1. Try to render with KaTeX
+            katex.render(code, livePreview, {
+                throwOnError: true,
+                displayMode: true
+            });
+        } catch (e) {
+            // 2. CHECK 1: Is it a full document? (Your new logic)
+            if (code.trim().startsWith('\\documentclass')) {
+                const friendlyMessage = `
+                <div style="color: #FFB300; padding: 10px; font-family: sans-serif; text-align: left; font-size: 0.9rem;">
+                  <strong>Preview Error!</strong>
+                  <p>This previewer can only render <b>math formulas</b>.</p>
+                  <p>It looks like you've generated a <b>full document</b> (starting with <code>\\documentclass</code>).</p>
+                  <hr style="border-color: #555; margin: 10px 0;">
+                  <p>Please use the <b>Overleaf</b> or <b>PDF</b> buttons to compile the full document.</p>
+                </div>
+              `;
+                livePreview.innerHTML = friendlyMessage;
+            } 
+            // 3. CHECK 2: Is it an "environment" that needs the "Render" button?
+            else if (e.message.includes('environment')) {
+                livePreview.classList.add('hidden');
+                diagramRenderer.classList.remove('hidden');
+            } 
+            // 4. CHECK 3: Otherwise, it's just a simple math typo
+            else {
+                livePreview.innerHTML = `<span style="color:red;">${e.message}</span>`;
+            }
         }
     };
 
@@ -124,7 +135,7 @@ try {
             editor.setValue(result.latexCode);
             editor.refresh(); // Important for CodeMirror
 
-            // ADDED: This call fixes the "Loading..." bug
+            // This call fixes the "Loading..." bug
             updatePreview(); 
 
         } catch (error) {
@@ -228,7 +239,7 @@ ${code}
         const API_ENDPOINT = '/api/generate';
         
         try {
-            const response = await fetch(API_ENDPOINT, {
+            const response = await fetch(API_POST, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: prompt })
