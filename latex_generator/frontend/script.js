@@ -46,25 +46,26 @@ document.addEventListener('DOMContentLoaded', () => {
             livePreview.innerHTML = '';
             return;
         }
-        try {
-            // 1. Try to render with KaTeX
-            katex.render(code, livePreview, {
-                throwOnError: true,
-                displayMode: true
-            });
-        } catch (e) {
-            // 2. If KaTeX fails, check if it's an "environment" error
-            if (e.message.includes('environment')) {
-                // e.g., "No such environment: itemize"
-                // e.g., "Unknown environment 'tikzpicture'"
-                
-                // 3. If so, hide the KaTeX area and show the full "Render" button
-                livePreview.classList.add('hidden');
-                diagramRenderer.classList.remove('hidden');
-            } else {
-                // 4. Otherwise, it's a real math syntax error, so show the error
-                livePreview.innerHTML = `<span style="color:red;">${e.message}</span>`;
-            }
+       // This is inside your app's JavaScript
+try {
+  // This line tries to render the LaTeX code
+  katex.render(latexCode, previewElement, { throwOnError: true });
+
+} catch (error) {
+  // This is the FIX:
+  // Instead of the error, show your custom message
+  const friendlyMessage = `
+    <div style="color: #FFB300; padding: 10px; font-family: sans-serif;">
+      <strong>Preview Error!</strong>
+      <p>This previewer can only render <b>math formulas</b> (like <code>$E=mc^2$</code>).</p>
+      <p>It looks like you've generated a <b>full document</b> (starting with <code>\\documentclass</code>).</p>
+      <hr style="border-color: #555;">
+      <p>Please <b>Copy</b> the code and use the <b>Overleaf</b> button to paste it into a full LaTeX compiler to see the final PDF.</p>
+    </div>
+  `;
+  
+  previewElement.innerHTML = friendlyMessage;
+}
         }
     };
 
