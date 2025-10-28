@@ -36,8 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lineWrapping: true
     });
 
-    // --- Function to update the live preview ---
-    // --- Function to update the live preview ---
+    // --- UPDATED: Function to update the live preview ---
     const updatePreview = () => {
         const code = editor.getValue();
         diagramRenderer.classList.add('hidden');
@@ -69,10 +68,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    editor.on('change', updatePreview);
+
     // --- Function to handle the "Render Diagram" button click ---
     const handleRenderClick = async () => {
         const code = editor.getValue();
-        livePreview.innerHTML = '<p>Compiling diagram...</p>';
+        livePreview.innerHTML = '<p>Compiling...</p>'; // Updated text
         livePreview.classList.remove('hidden');
         diagramRenderer.classList.add('hidden');
 
@@ -85,14 +86,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to render diagram.');
+                throw new Error(errorData.error || 'Failed to render.');
             }
 
             const data = await response.json();
             livePreview.innerHTML = data.svgImage;
 
         } catch (error) {
-            console.error("Diagram Render Error:", error);
+            console.error("Render Error:", error);
             livePreview.innerHTML = `<p style="color:red;">${error.message}</p>`;
         }
     };
@@ -122,6 +123,9 @@ document.addEventListener('DOMContentLoaded', () => {
             editor.setValue(result.latexCode);
             editor.refresh(); // Important for CodeMirror
 
+            // ADDED: This call fixes the "Loading..." bug
+            updatePreview(); 
+
         } catch (error) {
             console.error("Error from AI:", error);
             editor.setValue(`% An error occurred:\n% ${error.message}`);
@@ -140,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     copyCodeBtn.addEventListener('click', () => {
-        // CHANGED: Get text from editor, not the static <pre> block
+        // UPDATED: Get text from editor
         navigator.clipboard.writeText(editor.getValue()).then(() => {
             copyCodeBtn.textContent = 'Copied!';
             setTimeout(() => { copyCodeBtn.textContent = 'Copy'; }, 2000);
@@ -167,15 +171,34 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- ADDED: Export Listeners ---
 
-   exportOverleafBtn.addEventListener('click', () => {
+    exportPdfBtn.addEventListener('click', () => {
+        const code = editor.getValue();
+        if (code.trim() === '') {
+            alert("Editor is empty. Nothing to export.");
+            return;
+        }
+
+        try {
+            const doc = new window.jsPDF();
+            doc.setFont('Courier', 'normal');
+            doc.setFontSize(12);
+            const lines = doc.splitTextToSize(code, 180); // 180mm width
+            doc.text(lines, 10, 10); // 10mm margin
+            doc.save('latex-code.pdf');
+        } catch (e) {
+            console.error("Error generating PDF:", e);
+            alert("An error occurred while generating the PDF.");
+        }
+    });
+
+    exportOverleafBtn.addEventListener('click', () => {
         const code = editor.getValue();
         if (code.trim() === '') {
             alert("Editor is empty. Nothing to send to Overleaf.");
             return;
         }
 
-        // --- NEW: Wrap the code in a full document template ---
-        // This makes it instantly compilable on Overleaf
+        // --- UPDATED: Wrap code in a full document ---
         const fullLatexCode = `\\documentclass{article}
 \\usepackage{amsmath}
 \\usepackage{tikz}
@@ -192,7 +215,7 @@ ${code}
         // URL-encode the full template
         const encodedCode = encodeURIComponent(fullLatexCode);
         
-        // Use the 'docs' endpoint which accepts a GET request with a 'snip' parameter
+        // Use the 'docs' endpoint which accepts a GET request
         const overleafUrl = `https://www.overleaf.com/docs?snip=${encodedCode}`;
 
         // Open the URL in a new tab
