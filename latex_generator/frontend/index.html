@@ -14,6 +14,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/stex/stex.min.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,7 +78,13 @@
                     <pre class="hidden"><code id="latex-output"></code></pre>
                 </div>
                 <div id="editor-panel" class="result-panel">
-                    <div class="panel-header"><h3>Live Editor & Preview</h3></div>
+                    <div class="panel-header">
+                        <h3>Live Editor & Preview</h3>
+                        <div class="button-group">
+                            <button id="export-pdf-btn" class="utility-btn">PDF</button>
+                            <button id="export-overleaf-btn" class="utility-btn">Overleaf</button>
+                        </div>
+                    </div>
                     <div class="editor-container">
                         <textarea id="latex-editor"></textarea>
                     </div>
