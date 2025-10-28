@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Function to update the live preview ---
+    // --- Function to update the live preview ---
     const updatePreview = () => {
         const code = editor.getValue();
         diagramRenderer.classList.add('hidden');
@@ -47,21 +48,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
+            // 1. Try to render with KaTeX
             katex.render(code, livePreview, {
                 throwOnError: true,
                 displayMode: true
             });
         } catch (e) {
-            if (e.message.includes("Unknown environment 'tikzpicture'") || e.message.includes("Unknown environment 'picture'")) {
+            // 2. If KaTeX fails, check if it's an "environment" error
+            if (e.message.includes('environment')) {
+                // e.g., "No such environment: itemize"
+                // e.g., "Unknown environment 'tikzpicture'"
+                
+                // 3. If so, hide the KaTeX area and show the full "Render" button
                 livePreview.classList.add('hidden');
                 diagramRenderer.classList.remove('hidden');
             } else {
+                // 4. Otherwise, it's a real math syntax error, so show the error
                 livePreview.innerHTML = `<span style="color:red;">${e.message}</span>`;
             }
         }
     };
-
-    editor.on('change', updatePreview);
 
     // --- Function to handle the "Render Diagram" button click ---
     const handleRenderClick = async () => {
