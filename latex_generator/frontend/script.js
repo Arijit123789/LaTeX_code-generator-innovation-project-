@@ -161,56 +161,36 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- ADDED: Export Listeners ---
 
-    exportPdfBtn.addEventListener('click', () => {
-        const code = editor.getValue();
-        if (code.trim() === '') {
-            alert("Editor is empty. Nothing to export.");
-            return;
-        }
-
-        try {
-            const doc = new window.jsPDF();
-            doc.setFont('Courier', 'normal');
-            doc.setFontSize(12);
-            const lines = doc.splitTextToSize(code, 180); // 180mm width
-            doc.text(lines, 10, 10); // 10mm margin
-            doc.save('latex-code.pdf');
-        } catch (e) {
-            console.error("Error generating PDF:", e);
-            alert("An error occurred while generating the PDF.");
-        }
-    });
-
-    exportOverleafBtn.addEventListener('click', () => {
+   exportOverleafBtn.addEventListener('click', () => {
         const code = editor.getValue();
         if (code.trim() === '') {
             alert("Editor is empty. Nothing to send to Overleaf.");
             return;
         }
 
-        // Create a temporary form to POST to Overleaf
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = 'https://www.overleaf.com/project/new'; // Opens a new project
-        form.target = '_blank'; // In a new tab
+        // --- NEW: Wrap the code in a full document template ---
+        // This makes it instantly compilable on Overleaf
+        const fullLatexCode = `\\documentclass{article}
+\\usepackage{amsmath}
+\\usepackage{tikz}
+\\usepackage{graphicx}
+\\pagestyle{empty}
 
-        // The 'snip' input holds the LaTeX code
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'snip';
-        input.value = code;
-        form.appendChild(input);
+\\begin{document}
 
-        // Add a name for the project
-        const nameInput = document.createElement('input');
-        nameInput.type = 'hidden';
-        nameInput.name = 'name';
-        nameInput.value = 'My AI-Generated LaTeX';
-        form.appendChild(nameInput);
+${code}
+
+\\end{document}
+`;
         
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
+        // URL-encode the full template
+        const encodedCode = encodeURIComponent(fullLatexCode);
+        
+        // Use the 'docs' endpoint which accepts a GET request with a 'snip' parameter
+        const overleafUrl = `https://www.overleaf.com/docs?snip=${encodedCode}`;
+
+        // Open the URL in a new tab
+        window.open(overleafUrl, '_blank');
     });
 
     // --- Backend Function for Vercel ---
