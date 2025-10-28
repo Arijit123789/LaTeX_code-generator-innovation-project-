@@ -85,7 +85,7 @@ def generate_latex():
             "Content-Type": "application/json"
         }
 
-        response = requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=120)
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=500)
         response.raise_for_status()
         response_data = response.json()
 
