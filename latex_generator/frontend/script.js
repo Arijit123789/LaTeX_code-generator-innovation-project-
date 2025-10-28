@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     
+    // ADDED: Make jsPDF available globally
+    window.jsPDF = window.jspdf.jsPDF;
+
     // --- Element References ---
     const appContainer = document.getElementById('app-container');
     const promptView = document.getElementById('prompt-view');
@@ -20,6 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeAboutBtn = document.getElementById('close-about-btn');
     const diagramRenderer = document.getElementById('diagram-renderer');
     const renderBtn = document.getElementById('render-btn');
+
+    // ADDED: New export button references
+    const exportPdfBtn = document.getElementById('export-pdf-btn');
+    const exportOverleafBtn = document.getElementById('export-overleaf-btn');
 
     // --- Initialize CodeMirror Editor ---
     const editor = CodeMirror.fromTextArea(document.getElementById('latex-editor'), {
@@ -107,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             latexOutput.textContent = result.latexCode;
             editor.setValue(result.latexCode);
-            editor.refresh();
+            editor.refresh(); // Important for CodeMirror
 
         } catch (error) {
             console.error("Error from AI:", error);
@@ -127,7 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     copyCodeBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(latexOutput.textContent).then(() => {
+        // CHANGED: Get text from editor, not the static <pre> block
+        navigator.clipboard.writeText(editor.getValue()).then(() => {
             copyCodeBtn.textContent = 'Copied!';
             setTimeout(() => { copyCodeBtn.textContent = 'Copy'; }, 2000);
         });
@@ -151,6 +159,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     closeAboutBtn.addEventListener('click', () => aboutView.classList.add('hidden'));
     
+    // --- ADDED: Export Listeners ---
+
+    exportPdfBtn.addEventListener('click', () => {
+        const code = editor.getValue();
+        if (code.trim() === '') {
+            alert("Editor is empty. Nothing to export.");
+            return;
+        }
+
+        try {
+            const doc = new window.jsPDF();
+            doc.setFont('Courier', 'normal');
+            doc.setFontSize(12);
+            const lines = doc.splitTextToSize(code, 180); // 180mm width
+            doc.text(lines, 10, 10); // 10mm margin
+            doc.save('latex-code.pdf');
+        } catch (e) {
+            console.error("Error generating PDF:", e);
+            alert("An error occurred while generating the PDF.");
+        }
+    });
+
+    exportOverleafBtn.addEventListener('click', () => {
+        const code = editor.getValue();
+        if (code.trim() === '') {
+            alert("Editor is empty. Nothing to send to Overleaf.");
+            return;
+        }
+
+        // Create a temporary form to POST to Overleaf
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://www.overleaf.com/project/new'; // Opens a new project
+        form.target = '_blank'; // In a new tab
+
+        // The 'snip' input holds the LaTeX code
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'snip';
+        input.value = code;
+        form.appendChild(input);
+
+        // Add a name for the project
+        const nameInput = document.createElement('input');
+        nameInput.type = 'hidden';
+        nameInput.name = 'name';
+        nameInput.value = 'My AI-Generated LaTeX';
+        form.appendChild(nameInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    });
+
     // --- Backend Function for Vercel ---
     async function getLatexFromClaude(prompt) {
         const API_ENDPOINT = '/api/generate';
