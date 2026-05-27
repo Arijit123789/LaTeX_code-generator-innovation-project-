@@ -11,7 +11,7 @@ CORS(app)
 # --- Gemini / Generative Language Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # This is the correct model name from your API list
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-pro-latest")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "emini-2.0-flash")
 
 BASE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_API_URL = f"{BASE_GEMINI_API_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
