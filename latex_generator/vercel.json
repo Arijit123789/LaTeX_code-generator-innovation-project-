@@ -1,22 +1,18 @@
 {
   "builds": [
     {
-      "src": "latex_generator/api/index.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
-    },
-    {
-      "src": "latex_generator/frontend/**",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "latex_generator/api/index.py"
+      "dest": "api/index.py"
     },
     {
       "src": "/(.*)",
-      "dest": "latex_generator/frontend/$1"
+      "dest": "/frontend/$1"
     }
   ]
 }
