@@ -21,7 +21,7 @@ CORS(app)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Free tier Gemini model
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 BASE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
