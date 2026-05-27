@@ -1,29 +1,31 @@
 import os
 import requests
+import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import traceback
 
 # =========================================================
-# Flask App Setup
+# FLASK APP
 # =========================================================
+
 app = Flask(__name__)
 CORS(app)
 
 # =========================================================
-# Gemini Configuration
+# GEMINI CONFIG
 # =========================================================
-
-# Set your API key in environment variables
-# Example:
-# export GEMINI_API_KEY=your_api_key_here
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Free tier Gemini model
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+# Stable Gemini model
+GEMINI_MODEL = os.getenv(
+    "GEMINI_MODEL",
+    "gemini-1.5-flash"
+)
 
-BASE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+BASE_GEMINI_API_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models"
+)
 
 GEMINI_API_URL = (
     f"{BASE_GEMINI_API_URL}/"
@@ -31,27 +33,29 @@ GEMINI_API_URL = (
 )
 
 # =========================================================
-# Health Check
+# HOME ROUTE
 # =========================================================
+
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
-        "message": "Gemini LaTeX API is running successfully"
+        "message": "AI LaTeX Generator Backend Running"
     })
 
+# =========================================================
+# LIST MODELS ROUTE
+# =========================================================
 
-# =========================================================
-# List Available Models
-# =========================================================
-@app.route('/api/list-models', methods=['GET'])
+@app.route("/api/list-models", methods=["GET"])
 def list_models():
 
-    if not GEMINI_API_KEY:
-        return jsonify({
-            "error": "GEMINI_API_KEY is not configured"
-        }), 500
-
     try:
+
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "error": "GEMINI_API_KEY not found"
+            }), 500
+
         url = (
             "https://generativelanguage.googleapis.com/"
             f"v1beta/models?key={GEMINI_API_KEY}"
@@ -63,16 +67,17 @@ def list_models():
 
         return jsonify(response.json())
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
+
         return jsonify({
-            "error": f"Failed to fetch models: {str(e)}"
+            "error": str(e)
         }), 500
 
+# =========================================================
+# GENERATE LATEX
+# =========================================================
 
-# =========================================================
-# Generate LaTeX Code using Gemini
-# =========================================================
-@app.route('/api/generate', methods=['POST'])
+@app.route("/api/generate", methods=["POST"])
 def generate_latex():
 
     try:
@@ -82,37 +87,39 @@ def generate_latex():
         prompt = data.get("prompt")
 
         if not prompt:
+
             return jsonify({
                 "error": "Prompt is missing"
             }), 400
 
         if not GEMINI_API_KEY:
+
             return jsonify({
-                "error": "GEMINI_API_KEY is not configured"
+                "error": "GEMINI_API_KEY missing"
             }), 500
 
         # =================================================
-        # System Instruction
+        # SYSTEM PROMPT
         # =================================================
+
         system_instruction = """
 You are an expert LaTeX assistant.
 
 The user will describe:
 - equations
-- diagrams
+- TikZ diagrams
 - tables
-- TikZ figures
 - mathematical content
 
-You must ONLY return valid raw LaTeX code.
+Return ONLY valid raw LaTeX code.
 
 DO NOT:
-- explain anything
+- explain
 - use markdown
-- use code fences
-- write introductory text
+- use code blocks
+- write extra text
 
-Return only pure LaTeX code.
+Only return LaTeX.
 """
 
         full_prompt = (
@@ -122,8 +129,9 @@ Return only pure LaTeX code.
         )
 
         # =================================================
-        # Gemini Payload
+        # GEMINI PAYLOAD
         # =================================================
+
         payload = {
             "contents": [
                 {
@@ -135,12 +143,8 @@ Return only pure LaTeX code.
                 }
             ],
             "generationConfig": {
-                "temperature": float(
-                    data.get("temperature", 0.2)
-                ),
-                "maxOutputTokens": int(
-                    data.get("maxOutputTokens", 1024)
-                )
+                "temperature": 0.2,
+                "maxOutputTokens": 1024
             }
         }
 
@@ -149,31 +153,28 @@ Return only pure LaTeX code.
         }
 
         # =================================================
-        # API Call
+        # API CALL
         # =================================================
+
         response = requests.post(
             GEMINI_API_URL,
             headers=headers,
             json=payload,
-            timeout=120
+            timeout=30
         )
 
         response.raise_for_status()
 
         response_data = response.json()
 
+        print("FULL GEMINI RESPONSE:")
+        print(response_data)
+
         # =================================================
-        # Parse Response
+        # VALIDATE RESPONSE
         # =================================================
+
         if not response_data.get("candidates"):
-
-            prompt_feedback = response_data.get("promptFeedback")
-
-            if prompt_feedback:
-                return jsonify({
-                    "error": "Prompt blocked",
-                    "details": prompt_feedback
-                }), 400
 
             return jsonify({
                 "error": "No candidates returned",
@@ -195,31 +196,38 @@ Return only pure LaTeX code.
         )
 
         if not raw_latex:
+
             return jsonify({
                 "error": "No LaTeX generated"
             }), 500
 
         # =================================================
-        # Cleanup Markdown if Gemini adds it
+        # CLEAN MARKDOWN
         # =================================================
+
         raw_latex = raw_latex.strip()
 
         if raw_latex.startswith("```latex"):
             raw_latex = raw_latex.replace(
-                "```latex", "", 1
+                "```latex",
+                "",
+                1
             ).strip()
 
         if raw_latex.startswith("```"):
             raw_latex = raw_latex.replace(
-                "```", "", 1
+                "```",
+                "",
+                1
             ).strip()
 
         if raw_latex.endswith("```"):
             raw_latex = raw_latex[:-3].strip()
 
         # =================================================
-        # Final Response
+        # RETURN RESPONSE
         # =================================================
+
         return jsonify({
             "latexCode": raw_latex
         })
@@ -238,6 +246,9 @@ Return only pure LaTeX code.
             except Exception:
                 error_text = e.response.text
 
+        print("FULL GEMINI ERROR:")
+        print(error_text)
+
         return jsonify({
             "error": f"Gemini API Error: {status_code}",
             "details": error_text
@@ -248,14 +259,14 @@ Return only pure LaTeX code.
         traceback.print_exc()
 
         return jsonify({
-            "error": f"Internal server error: {str(e)}"
+            "error": str(e)
         }), 500
 
+# =========================================================
+# RENDER LATEX TO SVG
+# =========================================================
 
-# =========================================================
-# Render LaTeX to SVG
-# =========================================================
-@app.route('/api/render', methods=['POST'])
+@app.route("/api/render", methods=["POST"])
 def render_diagram():
 
     try:
@@ -265,20 +276,22 @@ def render_diagram():
         latex_code = data.get("latexCode")
 
         if not latex_code:
+
             return jsonify({
                 "error": "No LaTeX code provided"
             }), 400
 
-        # =================================================
-        # External Render Service
-        # =================================================
-        RENDER_SERVICE_URL = "https://latex.yt/api/savetex"
+        RENDER_SERVICE_URL = (
+            "https://latex.yt/api/savetex"
+        )
 
         full_document = f"""
 \\documentclass{{article}}
+
 \\usepackage{{tikz}}
 \\usepackage{{amsmath}}
 \\usepackage{{amssymb}}
+
 \\pagestyle{{empty}}
 
 \\begin{{document}}
@@ -297,7 +310,7 @@ def render_diagram():
         response = requests.post(
             RENDER_SERVICE_URL,
             json=payload,
-            timeout=60
+            timeout=30
         )
 
         response.raise_for_status()
@@ -307,6 +320,7 @@ def render_diagram():
         svg_image_data = result.get("result")
 
         if not svg_image_data:
+
             return jsonify({
                 "error": "SVG generation failed",
                 "details": result
@@ -327,13 +341,13 @@ def render_diagram():
         traceback.print_exc()
 
         return jsonify({
-            "error": f"Internal rendering error: {str(e)}"
+            "error": str(e)
         }), 500
 
+# =========================================================
+# MAIN
+# =========================================================
 
-# =========================================================
-# Run Flask Server
-# =========================================================
 if __name__ == "__main__":
 
     app.run(
