@@ -139,7 +139,7 @@ Return only pure LaTeX code.
                     data.get("temperature", 0.2)
                 ),
                 "maxOutputTokens": int(
-                    data.get("maxOutputTokens", 4096)
+                    data.get("maxOutputTokens", 1024)
                 )
             }
         }
