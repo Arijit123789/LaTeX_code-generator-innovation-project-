@@ -81,46 +81,32 @@ def list_models():
 def generate_latex():
 
     try:
-
         data = request.json or {}
-
         prompt = data.get("prompt")
 
         if not prompt:
+            return jsonify({"error": "Prompt is missing"}), 400
 
-            return jsonify({
-                "error": "Prompt is missing"
-            }), 400
+        # 1. Grab env vars inside the function
+        api_key = os.getenv("GEMINI_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
-        if not GEMINI_API_KEY:
+        if not api_key:
+            return jsonify({"error": "GEMINI_API_KEY missing"}), 500
 
-            return jsonify({
-                "error": "GEMINI_API_KEY missing"
-            }), 500
+        # 2. Strip "models/" if it was accidentally included in the .env file
+        if model_name.startswith("models/"):
+            model_name = model_name.replace("models/", "", 1)
 
-        # =================================================
-        # SYSTEM PROMPT
-        # =================================================
+        # 3. Construct the exact URL safely
+        gemini_url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model_name}:generateContent?key={api_key}"
+        )
 
         system_instruction = """
-You are an expert LaTeX assistant.
-
-The user will describe:
-- equations
-- TikZ diagrams
-- tables
-- mathematical content
-
-Return ONLY valid raw LaTeX code.
-
-DO NOT:
-- explain
-- use markdown
-- use code blocks
-- write extra text
-
-Only return LaTeX.
-"""
+        ... (Keep your existing system prompt here) ...
+        """
 
         full_prompt = (
             f"{system_instruction}\n\n"
@@ -128,40 +114,25 @@ Only return LaTeX.
             f"LATEX CODE:"
         )
 
-        # =================================================
-        # GEMINI PAYLOAD
-        # =================================================
-
         payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": full_prompt
-                        }
-                    ]
-                }
-            ],
+            "contents": [{"parts": [{"text": full_prompt}]}],
             "generationConfig": {
                 "temperature": 0.2,
                 "maxOutputTokens": 1024
             }
         }
 
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
 
-        # =================================================
-        # API CALL
-        # =================================================
-
+        # 4. Use the dynamically generated URL
         response = requests.post(
-            GEMINI_API_URL,
+            gemini_url, 
             headers=headers,
             json=payload,
             timeout=30
         )
+
+        # ... (Keep the rest of your error handling and processing logic the same) ...
 
         response.raise_for_status()
 
